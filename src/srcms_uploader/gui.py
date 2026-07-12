@@ -180,7 +180,7 @@ class UploaderApp:
             uploader.disconnect()
 
     def _update_progress(self, current: int, total: int, filename: str) -> None:
-        self._progressbar["value"] = current - 1
+        self._progressbar["value"] = current
         self._progress_var.set(f"Uploading ({current}/{total}): {filename}")
 
     def _upload_done(self, error: Optional[str]) -> None:

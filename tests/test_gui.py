@@ -13,7 +13,7 @@ from srcms_uploader.config import RemoteApp
 
 @pytest.fixture
 def mock_tk():
-    """Patch tkinter so tests run without a display."""
+    """Patch the gui module's tk import so tests run without a display."""
     with patch("srcms_uploader.gui.tk") as mock_tk_mod:
         # Make Tk() return a mock root
         mock_root = MagicMock()
