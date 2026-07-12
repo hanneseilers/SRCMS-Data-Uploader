@@ -9,7 +9,10 @@ from __future__ import annotations
 import sys
 from typing import Optional
 
-from .gui import UploaderApp
+if __package__:
+    from .gui import UploaderApp
+else:
+    from srcms_uploader.gui import UploaderApp
 
 
 def main(config_path: Optional[str] = None) -> int:

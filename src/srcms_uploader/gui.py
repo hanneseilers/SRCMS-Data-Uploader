@@ -15,8 +15,12 @@ from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 from typing import List, Optional
 
-from .adb import AdbUploader, ADB_DEFAULT_PORT
-from .config import RemoteApp, load_config
+if __package__:
+    from .adb import AdbUploader, ADB_DEFAULT_PORT
+    from .config import RemoteApp, load_config
+else:
+    from srcms_uploader.adb import AdbUploader, ADB_DEFAULT_PORT
+    from srcms_uploader.config import RemoteApp, load_config
 
 
 class UploaderApp:
