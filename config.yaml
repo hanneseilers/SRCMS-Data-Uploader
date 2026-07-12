@@ -1,0 +1,24 @@
+# SRCMS Data Uploader – remote app configuration
+#
+# Each entry defines a named "app" (category) on the Android device and the
+# remote path where files should be uploaded to.
+#
+# Fields:
+#   name  – Human-readable label shown in the selection menu
+#   path  – Absolute path on the Android device (used as the adb push destination)
+
+apps:
+  - name: "SRCMS"
+    path: "/sdcard/SRCMS/uploads"
+
+  - name: "Photos"
+    path: "/sdcard/DCIM/Uploads"
+
+  - name: "Music"
+    path: "/sdcard/Music/Uploads"
+
+  - name: "Documents"
+    path: "/sdcard/Documents/Uploads"
+
+  - name: "Videos"
+    path: "/sdcard/Movies/Uploads"
