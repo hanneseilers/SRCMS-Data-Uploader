@@ -34,6 +34,7 @@ class UploaderApp:
         self._current_remote_dir: Optional[str] = None
         self._current_remote_app_name: Optional[str] = None
         self._remote_uploader: Optional[AdbUploader] = None
+        self._is_connected = False
 
         self._root = tk.Tk()
         self._root.title("SRCMS Data Uploader")
@@ -157,6 +158,7 @@ class UploaderApp:
 
         self._remote_listbox = tk.Listbox(frame_remote, height=8, width=60)
         self._remote_listbox.pack(fill="x", pady=(5, 0))
+        self._sync_connection_controls()
 
     # ------------------------------------------------------------------
     # File chooser actions
@@ -219,6 +221,12 @@ class UploaderApp:
 
     def _set_connection_state(self, connected: bool) -> None:
         """Update connection-dependent controls."""
+        self._is_connected = connected
+        self._sync_connection_controls()
+
+    def _sync_connection_controls(self) -> None:
+        """Apply the current connection state to the UI."""
+        connected = self._is_connected
         self._btn_connect.config(state="disabled" if connected else "normal")
         self._btn_disconnect.config(state="normal" if connected else "disabled")
         remote_state = "normal" if connected else "disabled"
@@ -227,15 +235,8 @@ class UploaderApp:
         self._upload_btn.config(state=remote_state)
 
     def _on_ip_changed(self, *_args) -> None:
-        """Disable remote-dependent buttons whenever the IP address field is edited."""
-        if self._remote_uploader is None:
-            self._btn_connect.config(state="normal")
-            self._btn_disconnect.config(state="disabled")
-            for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up, self._btn_delete, self._upload_btn):
-                btn.config(state="disabled")
-        else:
-            self._btn_connect.config(state="disabled")
-            self._btn_disconnect.config(state="normal")
+        """Keep the connection controls driven by connection state."""
+        self._sync_connection_controls()
 
     def _disconnect_remote(self) -> None:
         if self._remote_uploader is None:
@@ -243,6 +244,16 @@ class UploaderApp:
 
         self._remote_uploader.disconnect()
         self._remote_uploader = None
+        self._remote_entries = []
+        self._remote_listbox.delete(0, tk.END)
+        self._remote_path_var.set("")
+        self._set_connection_state(False)
+
+    def _terminate_remote_connection(self) -> None:
+        """Mark the active connection as lost and reset the UI."""
+        if self._remote_uploader is not None:
+            self._remote_uploader.disconnect()
+            self._remote_uploader = None
         self._remote_entries = []
         self._remote_listbox.delete(0, tk.END)
         self._remote_path_var.set("")
@@ -309,11 +320,7 @@ class UploaderApp:
         except RuntimeError as exc:
             if not silent_on_error:
                 messagebox.showerror("Remote Explorer Error", str(exc))
-            self._remote_entries = []
-            self._remote_listbox.delete(0, tk.END)
-            self._remote_path_var.set(
-                f"Current remote path: {self._current_remote_dir} (connection failed)"
-            )
+            self._terminate_remote_connection()
             return
 
         self._remote_listbox.delete(0, tk.END)
@@ -388,6 +395,7 @@ class UploaderApp:
             messagebox.showinfo("Delete Complete", f"Deleted '{remote_path}'.")
         except RuntimeError as exc:
             messagebox.showerror("Delete Failed", str(exc))
+            self._terminate_remote_connection()
             return
 
         self._refresh_remote_browser()
