@@ -63,9 +63,14 @@ class UploaderApp:
         frame_ip = ttk.LabelFrame(root, text="Device IP Address", padding=10)
         frame_ip.pack(fill="x", **pad)
 
+        ip_row = ttk.Frame(frame_ip)
+        ip_row.pack(fill="x")
+
         self._ip_var = tk.StringVar(master=root)
-        ip_entry = ttk.Entry(frame_ip, textvariable=self._ip_var, width=40)
-        ip_entry.pack(fill="x")
+        ip_entry = ttk.Entry(ip_row, textvariable=self._ip_var, width=36)
+        ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        ttk.Button(ip_row, text="Open", command=self._connect_and_browse).pack(side="left")
 
         # --- File Selection ---
         frame_files = ttk.LabelFrame(root, text="Files / Directories to Upload", padding=10)
@@ -120,7 +125,7 @@ class UploaderApp:
         ttk.Button(remote_btn_frame, text="Refresh", command=self._refresh_remote_browser).pack(
             side="left", padx=(0, 5)
         )
-        ttk.Button(remote_btn_frame, text="Open", command=self._open_selected_remote_entry).pack(
+        ttk.Button(remote_btn_frame, text="Enter Dir", command=self._open_selected_remote_entry).pack(
             side="left", padx=(0, 5)
         )
         ttk.Button(remote_btn_frame, text="Up", command=self._go_remote_parent).pack(
@@ -161,11 +166,27 @@ class UploaderApp:
     # Remote explorer actions
     # ------------------------------------------------------------------
 
+    def _connect_and_browse(self) -> None:
+        """Connect to the device with the entered IP and load the app's remote path."""
+        ip = self._ip_var.get().strip()
+        if not ip:
+            messagebox.showwarning("Missing Input", "Please enter the device IP address.")
+            return
+
+        remote_app = self._selected_remote_app()
+        if remote_app is None:
+            messagebox.showwarning("Missing Input", "Please select a remote app.")
+            return
+
+        # Always start at the app root when connecting
+        self._current_remote_dir = remote_app.path
+        self._refresh_remote_browser(silent_on_error=True)
+
     def _selected_remote_app(self) -> Optional[RemoteApp]:
         selected_name = self._app_var.get()
         return next((a for a in self._apps if a.name == selected_name), None)
 
-    def _refresh_remote_browser(self) -> None:
+    def _refresh_remote_browser(self, silent_on_error: bool = False) -> None:
         ip = self._ip_var.get().strip()
         if not ip:
             messagebox.showwarning("Missing Input", "Please enter the device IP address.")
@@ -184,7 +205,11 @@ class UploaderApp:
             uploader.connect()
             self._remote_entries = uploader.list_directory(self._current_remote_dir)
         except RuntimeError as exc:
-            messagebox.showerror("Remote Explorer Error", str(exc))
+            if not silent_on_error:
+                messagebox.showerror("Remote Explorer Error", str(exc))
+            self._remote_entries = []
+            self._remote_listbox.delete(0, tk.END)
+            self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
             return
         finally:
             uploader.disconnect()

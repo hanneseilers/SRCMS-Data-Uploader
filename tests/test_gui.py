@@ -160,3 +160,55 @@ class TestUploaderApp:
         app._delete_selected_remote_entry()
 
         mock_uploader.delete_remote_path.assert_called_once_with("/sdcard/SRCMS/uploads/old")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_connect_and_browse_resets_to_app_root(self, mock_uploader_cls, mock_ttk, mock_tk, config_file):
+        """connect_and_browse should always start at the app root path."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+        # Pre-set a deeper dir to ensure it is reset to root
+        app._current_remote_dir = "/sdcard/SRCMS/uploads/subdir"
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = [("file.txt", False)]
+
+        app._connect_and_browse()
+
+        assert app._current_remote_dir == "/sdcard/SRCMS/uploads"
+        mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.messagebox.showerror")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_connect_and_browse_silent_on_missing_path(
+        self, mock_uploader_cls, mock_showerror, mock_ttk, mock_tk, config_file
+    ):
+        """connect_and_browse should show empty list silently if path not found."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.side_effect = RuntimeError("No such file or directory")
+
+        app._connect_and_browse()
+
+        # No error dialog should appear
+        mock_showerror.assert_not_called()
+        # Listbox cleared, entries empty
+        assert app._remote_entries == []
+        app._remote_listbox.delete.assert_called()
