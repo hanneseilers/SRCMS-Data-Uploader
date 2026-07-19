@@ -67,6 +67,7 @@ class UploaderApp:
         ip_row.pack(fill="x")
 
         self._ip_var = tk.StringVar(master=root)
+        self._ip_var.trace_add("write", self._on_ip_changed)
         ip_entry = ttk.Entry(ip_row, textvariable=self._ip_var, width=36)
         ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
@@ -101,7 +102,8 @@ class UploaderApp:
             self._app_combo.current(0)
 
         # --- Upload Button ---
-        self._upload_btn = ttk.Button(root, text="Upload", command=self._start_upload)
+        self._upload_btn = ttk.Button(root, text="Upload", command=self._start_upload,
+                                      state="disabled")
         self._upload_btn.pack(**pad)
 
         # --- Progress ---
@@ -122,18 +124,22 @@ class UploaderApp:
         remote_btn_frame = ttk.Frame(frame_remote)
         remote_btn_frame.pack(fill="x", pady=(5, 0))
 
-        ttk.Button(remote_btn_frame, text="Refresh", command=self._refresh_remote_browser).pack(
-            side="left", padx=(0, 5)
-        )
-        ttk.Button(remote_btn_frame, text="Enter Dir", command=self._open_selected_remote_entry).pack(
-            side="left", padx=(0, 5)
-        )
-        ttk.Button(remote_btn_frame, text="Up", command=self._go_remote_parent).pack(
-            side="left", padx=(0, 5)
-        )
-        ttk.Button(remote_btn_frame, text="Delete Selected", command=self._delete_selected_remote_entry).pack(
-            side="left"
-        )
+        self._btn_refresh = ttk.Button(remote_btn_frame, text="Refresh",
+                                       command=self._refresh_remote_browser,
+                                       state="disabled")
+        self._btn_refresh.pack(side="left", padx=(0, 5))
+        self._btn_enter_dir = ttk.Button(remote_btn_frame, text="Enter Dir",
+                                         command=self._open_selected_remote_entry,
+                                         state="disabled")
+        self._btn_enter_dir.pack(side="left", padx=(0, 5))
+        self._btn_up = ttk.Button(remote_btn_frame, text="Up",
+                                  command=self._go_remote_parent,
+                                  state="disabled")
+        self._btn_up.pack(side="left", padx=(0, 5))
+        self._btn_delete = ttk.Button(remote_btn_frame, text="Delete Selected",
+                                      command=self._delete_selected_remote_entry,
+                                      state="disabled")
+        self._btn_delete.pack(side="left")
 
         self._remote_listbox = tk.Listbox(frame_remote, height=8, width=60)
         self._remote_listbox.pack(fill="x", pady=(5, 0))
@@ -180,7 +186,17 @@ class UploaderApp:
 
         # Always start at the app root when connecting
         self._current_remote_dir = remote_app.path
-        self._refresh_remote_browser(silent_on_error=True)
+        self._refresh_remote_browser()
+
+    def _set_remote_buttons_state(self, state: str) -> None:
+        """Enable or disable all buttons that require an active remote connection."""
+        for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up,
+                    self._btn_delete, self._upload_btn):
+            btn.config(state=state)
+
+    def _on_ip_changed(self, *_args) -> None:
+        """Disable remote-dependent buttons whenever the IP address field is edited."""
+        self._set_remote_buttons_state("disabled")
 
     def _selected_remote_app(self) -> Optional[RemoteApp]:
         selected_name = self._app_var.get()
@@ -210,6 +226,7 @@ class UploaderApp:
             self._remote_entries = []
             self._remote_listbox.delete(0, tk.END)
             self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+            self._set_remote_buttons_state("disabled")
             return
         finally:
             uploader.disconnect()
@@ -219,6 +236,7 @@ class UploaderApp:
             label = f"[DIR] {name}" if is_dir else name
             self._remote_listbox.insert(tk.END, label)
         self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+        self._set_remote_buttons_state("normal")
 
     def _open_selected_remote_entry(self) -> None:
         selected = self._get_selected_remote_entry()

@@ -188,10 +188,10 @@ class TestUploaderApp:
     @patch("srcms_uploader.gui.ttk")
     @patch("srcms_uploader.gui.messagebox.showerror")
     @patch("srcms_uploader.gui.AdbUploader")
-    def test_connect_and_browse_silent_on_missing_path(
+    def test_connect_and_browse_shows_error_on_failed_connection(
         self, mock_uploader_cls, mock_showerror, mock_ttk, mock_tk, config_file
     ):
-        """connect_and_browse should show empty list silently if path not found."""
+        """connect_and_browse should show an error dialog if the connection fails."""
         from srcms_uploader.gui import UploaderApp
 
         app = UploaderApp(config_path=str(config_file))
@@ -207,8 +207,8 @@ class TestUploaderApp:
 
         app._connect_and_browse()
 
-        # No error dialog should appear
-        mock_showerror.assert_not_called()
+        # An error dialog should appear so the user knows the connection failed
+        mock_showerror.assert_called_once()
         # Listbox cleared, entries empty
         assert app._remote_entries == []
         app._remote_listbox.delete.assert_called()
