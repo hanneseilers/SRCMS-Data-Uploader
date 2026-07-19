@@ -225,7 +225,9 @@ class UploaderApp:
                 messagebox.showerror("Remote Explorer Error", str(exc))
             self._remote_entries = []
             self._remote_listbox.delete(0, tk.END)
-            self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+            self._remote_path_var.set(
+                f"Current remote path: {self._current_remote_dir} (connection failed)"
+            )
             self._set_remote_buttons_state("disabled")
             return
         finally:
