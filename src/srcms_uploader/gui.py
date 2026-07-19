@@ -254,10 +254,15 @@ class UploaderApp:
         if self._remote_uploader is not None:
             self._remote_uploader.disconnect()
             self._remote_uploader = None
-        self._remote_entries = []
-        self._remote_listbox.delete(0, tk.END)
-        self._remote_path_var.set("")
+        self._reset_remote_browser_ui()
         self._set_connection_state(False)
+
+    def _reset_remote_browser_ui(self, clear_path: bool = True) -> None:
+        self._remote_entries = []
+        if hasattr(self, "_remote_listbox"):
+            self._remote_listbox.delete(0, tk.END)
+        if clear_path and hasattr(self, "_remote_path_var"):
+            self._remote_path_var.set("")
 
     def _selected_remote_app(self) -> Optional[RemoteApp]:
         selected_name = self._app_var.get()
@@ -279,22 +284,22 @@ class UploaderApp:
         if remote_app is None:
             self._current_remote_app_name = None
             self._current_remote_dir = None
-            self._selected_app_path_var.set("")
-            self._remote_entries = []
-            self._remote_listbox.delete(0, tk.END)
-            self._remote_path_var.set("")
+            if hasattr(self, "_selected_app_path_var"):
+                self._selected_app_path_var.set("")
+            self._reset_remote_browser_ui()
             return
 
         self._current_remote_app_name = remote_app.name
-        self._selected_app_path_var.set(remote_app.path)
+        if hasattr(self, "_selected_app_path_var"):
+            self._selected_app_path_var.set(remote_app.path)
         self._ensure_remote_browser_root(remote_app)
-        self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+        if hasattr(self, "_remote_path_var"):
+            self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
 
         if self._ip_var.get().strip():
             self._refresh_remote_browser()
         else:
-            self._remote_entries = []
-            self._remote_listbox.delete(0, tk.END)
+            self._reset_remote_browser_ui(clear_path=False)
 
     def _refresh_remote_browser(self, silent_on_error: bool = False) -> None:
         ip = self._ip_var.get().strip()

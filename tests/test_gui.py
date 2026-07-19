@@ -215,6 +215,21 @@ class TestUploaderApp:
         app._remote_listbox.delete.assert_called_once_with(0, "end")
 
     @patch("srcms_uploader.gui.ttk")
+    def test_app_selection_without_remote_widgets_does_not_crash(self, mock_ttk, mock_tk, config_file):
+        """startup callback should tolerate missing remote explorer widgets."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = ""
+        del app._remote_path_var
+        del app._remote_listbox
+
+        app._on_app_changed()
+
+        assert app._current_remote_dir is None
+
+    @patch("srcms_uploader.gui.ttk")
     @patch("srcms_uploader.gui.AdbUploader")
     def test_refresh_remote_browser_resets_from_previous_app_root(
         self, mock_uploader_cls, mock_ttk, mock_tk, config_file
