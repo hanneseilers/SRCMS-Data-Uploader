@@ -224,14 +224,11 @@ class UploaderApp:
         if current == root:
             return
 
-        try:
-            parent = current.parent
-            if len(parent.parts) < len(root.parts):
-                parent = root
-            self._current_remote_dir = str(parent)
-            self._refresh_remote_browser()
-        except RuntimeError:
-            messagebox.showerror("Remote Explorer Error", "Unable to navigate to parent directory.")
+        parent = current.parent
+        if len(parent.parts) < len(root.parts):
+            parent = root
+        self._current_remote_dir = str(parent)
+        self._refresh_remote_browser()
 
     def _delete_selected_remote_entry(self) -> None:
         selected = self._get_selected_remote_entry()
