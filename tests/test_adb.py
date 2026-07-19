@@ -196,7 +196,10 @@ class TestRemoteFileManagement:
     def test_list_directory_success(self, uploader):
         with patch(
             "srcms_uploader.adb._run",
-            return_value=self._make_result(stdout="alpha.txt\nsubdir/\n"),
+            return_value=self._make_result(
+                stdout="total 2\n-rw-rw---- 1 u0_a130 sdcard_rw 0 2024-12-20 14:26 alpha.txt\n"
+                       "drwxrwx--x 1 u0_a130 sdcard_rw 0 2024-12-20 14:26 subdir\n"
+            ),
         ) as mock_run:
             entries = uploader.list_directory("/sdcard/SRCMS/uploads")
             assert entries == [("alpha.txt", False), ("subdir", True)]
@@ -206,9 +209,7 @@ class TestRemoteFileManagement:
                     "-s",
                     f"192.168.1.100:{ADB_DEFAULT_PORT}",
                     "shell",
-                    "sh",
-                    "-c",
-                    "ls -1Ap /sdcard/SRCMS/uploads",
+                    "ls -l /sdcard/SRCMS/uploads",
                 ],
                 check=False,
             )
@@ -230,8 +231,6 @@ class TestRemoteFileManagement:
                     "-s",
                     f"192.168.1.100:{ADB_DEFAULT_PORT}",
                     "shell",
-                    "sh",
-                    "-c",
                     "rm -rf -- /sdcard/SRCMS/uploads/stale.txt",
                 ],
                 check=False,

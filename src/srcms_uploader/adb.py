@@ -169,9 +169,9 @@ class AdbUploader:
             without trailing slashes.
         """
         target = f"{self.host}:{self.port}"
-        command = f"ls -1Ap {shlex.quote(remote_dir)}"
+        command = f"ls -l {shlex.quote(remote_dir)}"
         result = _run(
-            [self._adb, "-s", target, "shell", "sh", "-c", command],
+            [self._adb, "-s", target, "shell", command],
             check=False,
         )
         output = (result.stdout + result.stderr).strip()
@@ -183,12 +183,13 @@ class AdbUploader:
         entries: List[Tuple[str, bool]] = []
         for raw_line in output.splitlines():
             line = raw_line.strip()
-            if not line:
+            if not line or line.startswith("total "):
                 continue
-            is_dir = line.endswith("/")
-            name = line[:-1] if is_dir else line
-            if name in (".", ".."):
+            parts = line.split()
+            if len(parts) < 2:
                 continue
+            is_dir = parts[0].startswith("d")
+            name = parts[-1]
             entries.append((name, is_dir))
         return entries
 
@@ -197,7 +198,7 @@ class AdbUploader:
         target = f"{self.host}:{self.port}"
         command = f"rm -rf -- {shlex.quote(remote_path)}"
         result = _run(
-            [self._adb, "-s", target, "shell", "sh", "-c", command],
+            [self._adb, "-s", target, "shell", command],
             check=False,
         )
         output = (result.stdout + result.stderr).strip()
