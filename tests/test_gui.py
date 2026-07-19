@@ -134,10 +134,11 @@ class TestUploaderApp:
         mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads/docs")
 
     @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.messagebox.showinfo")
     @patch("srcms_uploader.gui.messagebox.askyesno", return_value=True)
     @patch("srcms_uploader.gui.AdbUploader")
     def test_delete_selected_remote_entry_calls_adb_delete(
-        self, mock_uploader_cls, mock_askyesno, mock_ttk, mock_tk, config_file
+        self, mock_uploader_cls, mock_askyesno, mock_showinfo, mock_ttk, mock_tk, config_file
     ):
         """delete should call adb deletion for the selected remote item."""
         from srcms_uploader.gui import UploaderApp

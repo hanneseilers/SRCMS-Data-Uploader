@@ -12,6 +12,7 @@ Supports building standalone executables for **Windows** and **Linux** with PyIn
 - Accepts one or more local files / directories to upload
 - Lets you select the destination app / category from a YAML config file
 - Connects to the Android device via `adb connect <ip>` and pushes the data
+- Includes a remote file explorer to browse and delete uploaded files/subdirectories
 
 ---
 
