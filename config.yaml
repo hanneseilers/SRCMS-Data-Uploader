@@ -8,17 +8,32 @@
 #   path  – Absolute path on the Android device (used as the adb push destination)
 
 apps:
-  - name: "SRCMS"
-    path: "/sdcard/SRCMS/uploads"
+  - name: "Audio-Quiz"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/AudioQuiz"
 
-  - name: "Photos"
-    path: "/sdcard/DCIM/Uploads"
+  - name: "Buchstaben-Quiz (Character)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Character"
 
-  - name: "Music"
-    path: "/sdcard/Music/Uploads"
+  - name: "Hinweis-Quiz (Hints)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Hints"
 
-  - name: "Documents"
-    path: "/sdcard/Documents/Uploads"
+  - name: "Jukebox"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Jukebox"
 
-  - name: "Videos"
-    path: "/sdcard/Movies/Uploads"
+  - name: "Stichwörter-Quiz (Keywords)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Keywords"
+
+  - name: "Meditation"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Mediation"
+
+  - name: "Sprichwörter-Quiz (Proverbs)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Proverbs"
+
+  - name: "Quiz"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Quiz"
+
+  - name: "Erinnerungs-Quiz (Remember)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Remember"
+
+  - name: "Geschichten (Storytelling)"
+    path: "/sdcard/Android/data/de.fhkiel.socialrobotcms/files/repo/Storytelling"
