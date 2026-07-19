@@ -12,8 +12,8 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from pathlib import Path
-from typing import List, Optional
+from pathlib import Path, PurePosixPath
+from typing import List, Optional, Tuple
 
 if __package__:
     from .adb import AdbUploader, ADB_DEFAULT_PORT
@@ -30,6 +30,8 @@ class UploaderApp:
         self._config_path = config_path
         self._apps: List[RemoteApp] = []
         self._selected_paths: List[Path] = []
+        self._remote_entries: List[Tuple[str, bool]] = []
+        self._current_remote_dir: Optional[str] = None
 
         self._root = tk.Tk()
         self._root.title("SRCMS Data Uploader")
@@ -105,6 +107,32 @@ class UploaderApp:
         self._progressbar = ttk.Progressbar(root, mode="determinate", length=400)
         self._progressbar.pack(**pad)
 
+        # --- Remote Explorer ---
+        frame_remote = ttk.LabelFrame(root, text="Remote Files", padding=10)
+        frame_remote.pack(fill="x", **pad)
+
+        self._remote_path_var = tk.StringVar(master=root, value="")
+        ttk.Label(frame_remote, textvariable=self._remote_path_var).pack(fill="x")
+
+        remote_btn_frame = ttk.Frame(frame_remote)
+        remote_btn_frame.pack(fill="x", pady=(5, 0))
+
+        ttk.Button(remote_btn_frame, text="Refresh", command=self._refresh_remote_browser).pack(
+            side="left", padx=(0, 5)
+        )
+        ttk.Button(remote_btn_frame, text="Open", command=self._open_selected_remote_entry).pack(
+            side="left", padx=(0, 5)
+        )
+        ttk.Button(remote_btn_frame, text="Up", command=self._go_remote_parent).pack(
+            side="left", padx=(0, 5)
+        )
+        ttk.Button(remote_btn_frame, text="Delete Selected", command=self._delete_selected_remote_entry).pack(
+            side="left"
+        )
+
+        self._remote_listbox = tk.Listbox(frame_remote, height=8, width=60)
+        self._remote_listbox.pack(fill="x", pady=(5, 0))
+
     # ------------------------------------------------------------------
     # File chooser actions
     # ------------------------------------------------------------------
@@ -128,6 +156,125 @@ class UploaderApp:
     def _clear_paths(self) -> None:
         self._selected_paths.clear()
         self._paths_listbox.delete(0, tk.END)
+
+    # ------------------------------------------------------------------
+    # Remote explorer actions
+    # ------------------------------------------------------------------
+
+    def _selected_remote_app(self) -> Optional[RemoteApp]:
+        selected_name = self._app_var.get()
+        return next((a for a in self._apps if a.name == selected_name), None)
+
+    def _refresh_remote_browser(self) -> None:
+        ip = self._ip_var.get().strip()
+        if not ip:
+            messagebox.showwarning("Missing Input", "Please enter the device IP address.")
+            return
+
+        remote_app = self._selected_remote_app()
+        if remote_app is None:
+            messagebox.showwarning("Missing Input", "Please select a remote app.")
+            return
+
+        if not self._current_remote_dir:
+            self._current_remote_dir = remote_app.path
+
+        uploader = AdbUploader(host=ip)
+        try:
+            uploader.connect()
+            self._remote_entries = uploader.list_directory(self._current_remote_dir)
+        except RuntimeError as exc:
+            messagebox.showerror("Remote Explorer Error", str(exc))
+            return
+        finally:
+            uploader.disconnect()
+
+        self._remote_listbox.delete(0, tk.END)
+        for name, is_dir in self._remote_entries:
+            label = f"[DIR] {name}" if is_dir else name
+            self._remote_listbox.insert(tk.END, label)
+        self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+
+    def _open_selected_remote_entry(self) -> None:
+        selected = self._get_selected_remote_entry()
+        if selected is None:
+            return
+        name, is_dir = selected
+        if not is_dir:
+            messagebox.showinfo("Remote Explorer", "Please select a subdirectory to open.")
+            return
+
+        base = PurePosixPath(self._current_remote_dir or "")
+        self._current_remote_dir = str(base / name)
+        self._refresh_remote_browser()
+
+    def _go_remote_parent(self) -> None:
+        remote_app = self._selected_remote_app()
+        if remote_app is None:
+            messagebox.showwarning("Missing Input", "Please select a remote app.")
+            return
+
+        if not self._current_remote_dir:
+            self._current_remote_dir = remote_app.path
+            self._refresh_remote_browser()
+            return
+
+        current = PurePosixPath(self._current_remote_dir)
+        root = PurePosixPath(remote_app.path)
+        if current == root:
+            return
+
+        try:
+            parent = current.parent
+            if len(parent.parts) < len(root.parts):
+                parent = root
+            self._current_remote_dir = str(parent)
+            self._refresh_remote_browser()
+        except RuntimeError:
+            messagebox.showerror("Remote Explorer Error", "Unable to navigate to parent directory.")
+
+    def _delete_selected_remote_entry(self) -> None:
+        selected = self._get_selected_remote_entry()
+        if selected is None:
+            return
+
+        name, _ = selected
+        remote_path = str(PurePosixPath(self._current_remote_dir or "") / name)
+        confirmed = messagebox.askyesno(
+            "Confirm Delete",
+            f"Delete '{remote_path}' from the remote device?",
+        )
+        if not confirmed:
+            return
+
+        ip = self._ip_var.get().strip()
+        if not ip:
+            messagebox.showwarning("Missing Input", "Please enter the device IP address.")
+            return
+
+        uploader = AdbUploader(host=ip)
+        try:
+            uploader.connect()
+            uploader.delete_remote_path(remote_path)
+            messagebox.showinfo("Delete Complete", f"Deleted '{remote_path}'.")
+        except RuntimeError as exc:
+            messagebox.showerror("Delete Failed", str(exc))
+            return
+        finally:
+            uploader.disconnect()
+
+        self._refresh_remote_browser()
+
+    def _get_selected_remote_entry(self) -> Optional[Tuple[str, bool]]:
+        selection = self._remote_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Remote Explorer", "Please select a file or subdirectory.")
+            return None
+
+        index = selection[0]
+        if index >= len(self._remote_entries):
+            return None
+        return self._remote_entries[index]
 
     # ------------------------------------------------------------------
     # Upload logic

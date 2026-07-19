@@ -83,3 +83,79 @@ class TestUploaderApp:
         app = UploaderApp(config_path=str(config_file))
         app.run()
         mock_root.mainloop.assert_called_once()
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_refresh_remote_browser_lists_entries(self, mock_uploader_cls, mock_ttk, mock_tk, config_file):
+        """refresh should list remote files/directories in the listbox."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = [("a.txt", False), ("docs", True)]
+
+        app._refresh_remote_browser()
+
+        mock_uploader.connect.assert_called_once()
+        mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads")
+        app._remote_listbox.insert.assert_any_call("end", "a.txt")
+        app._remote_listbox.insert.assert_any_call("end", "[DIR] docs")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_open_selected_remote_entry_changes_directory(self, mock_uploader_cls, mock_ttk, mock_tk, config_file):
+        """open should move into selected remote subdirectory."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_listbox.curselection.return_value = (0,)
+        app._remote_path_var = MagicMock()
+        app._remote_entries = [("docs", True)]
+        app._current_remote_dir = "/sdcard/SRCMS/uploads"
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = []
+
+        app._open_selected_remote_entry()
+
+        assert app._current_remote_dir == "/sdcard/SRCMS/uploads/docs"
+        mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads/docs")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.messagebox.askyesno", return_value=True)
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_delete_selected_remote_entry_calls_adb_delete(
+        self, mock_uploader_cls, mock_askyesno, mock_ttk, mock_tk, config_file
+    ):
+        """delete should call adb deletion for the selected remote item."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_listbox.curselection.return_value = (0,)
+        app._remote_path_var = MagicMock()
+        app._remote_entries = [("old", True)]
+        app._current_remote_dir = "/sdcard/SRCMS/uploads"
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = []
+
+        app._delete_selected_remote_entry()
+
+        mock_uploader.delete_remote_path.assert_called_once_with("/sdcard/SRCMS/uploads/old")

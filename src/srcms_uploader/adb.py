@@ -7,9 +7,10 @@ local files and directories to a specified path on the device.
 from __future__ import annotations
 
 import shutil
+import shlex
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 
 # Default ADB TCP port used by Android devices
@@ -153,3 +154,54 @@ class AdbUploader:
         """
         for path in local_paths:
             self.push(path, remote_dir)
+
+    # ------------------------------------------------------------------
+    # Remote file management
+    # ------------------------------------------------------------------
+
+    def list_directory(self, remote_dir: str) -> List[Tuple[str, bool]]:
+        """List entries in a remote directory.
+
+        Returns
+        -------
+        list[tuple[str, bool]]
+            Tuples of (entry_name, is_directory). Directory names are returned
+            without trailing slashes.
+        """
+        target = f"{self.host}:{self.port}"
+        command = f"ls -1Ap {shlex.quote(remote_dir)}"
+        result = _run(
+            [self._adb, "-s", target, "shell", "sh", "-c", command],
+            check=False,
+        )
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to list remote directory '{remote_dir}'.\nADB output: {output}"
+            )
+
+        entries: List[Tuple[str, bool]] = []
+        for raw_line in output.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            is_dir = line.endswith("/")
+            name = line[:-1] if is_dir else line
+            if name in (".", ".."):
+                continue
+            entries.append((name, is_dir))
+        return entries
+
+    def delete_remote_path(self, remote_path: str) -> None:
+        """Delete a remote file or directory recursively."""
+        target = f"{self.host}:{self.port}"
+        command = f"rm -rf -- {shlex.quote(remote_path)}"
+        result = _run(
+            [self._adb, "-s", target, "shell", "sh", "-c", command],
+            check=False,
+        )
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to delete remote path '{remote_path}'.\nADB output: {output}"
+            )

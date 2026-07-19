@@ -183,3 +183,64 @@ class TestPushMany:
         with patch.object(uploader, "push", side_effect=side_effect):
             with pytest.raises(RuntimeError):
                 uploader.push_many(files, "/sdcard/path")
+
+
+class TestRemoteFileManagement:
+    def _make_result(self, returncode=0, stdout="", stderr=""):
+        result = MagicMock(spec=subprocess.CompletedProcess)
+        result.returncode = returncode
+        result.stdout = stdout
+        result.stderr = stderr
+        return result
+
+    def test_list_directory_success(self, uploader):
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(stdout="alpha.txt\nsubdir/\n"),
+        ) as mock_run:
+            entries = uploader.list_directory("/sdcard/SRCMS/uploads")
+            assert entries == [("alpha.txt", False), ("subdir", True)]
+            mock_run.assert_called_once_with(
+                [
+                    "/usr/bin/adb",
+                    "-s",
+                    f"192.168.1.100:{ADB_DEFAULT_PORT}",
+                    "shell",
+                    "sh",
+                    "-c",
+                    "ls -1Ap /sdcard/SRCMS/uploads",
+                ],
+                check=False,
+            )
+
+    def test_list_directory_failure_raises(self, uploader):
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(returncode=1, stderr="Permission denied"),
+        ):
+            with pytest.raises(RuntimeError, match="Failed to list remote directory"):
+                uploader.list_directory("/sdcard/SRCMS/uploads")
+
+    def test_delete_remote_path_success(self, uploader):
+        with patch("srcms_uploader.adb._run", return_value=self._make_result()) as mock_run:
+            uploader.delete_remote_path("/sdcard/SRCMS/uploads/stale.txt")
+            mock_run.assert_called_once_with(
+                [
+                    "/usr/bin/adb",
+                    "-s",
+                    f"192.168.1.100:{ADB_DEFAULT_PORT}",
+                    "shell",
+                    "sh",
+                    "-c",
+                    "rm -rf -- /sdcard/SRCMS/uploads/stale.txt",
+                ],
+                check=False,
+            )
+
+    def test_delete_remote_path_failure_raises(self, uploader):
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(returncode=1, stderr="No such file"),
+        ):
+            with pytest.raises(RuntimeError, match="Failed to delete remote path"):
+                uploader.delete_remote_path("/sdcard/SRCMS/uploads/stale.txt")
