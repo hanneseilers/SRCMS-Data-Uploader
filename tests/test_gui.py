@@ -106,7 +106,7 @@ class TestUploaderApp:
 
         mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads")
         mock_uploader.disconnect.assert_not_called()
-        app._remote_listbox.insert.assert_any_call("end", "a.txt")
+        app._remote_listbox.insert.assert_any_call("end", "   a.txt")
         app._remote_listbox.insert.assert_any_call("end", "[DIR] docs")
 
     @patch("srcms_uploader.gui.ttk")
@@ -134,6 +134,14 @@ class TestUploaderApp:
 
         assert app._current_remote_dir == "/sdcard/SRCMS/uploads/docs"
         mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads/docs")
+
+    @patch("srcms_uploader.gui.ttk")
+    def test_remote_listbox_uses_double_click_binding(self, mock_ttk, mock_tk, config_file):
+        """remote entries should open via double click instead of a button."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._remote_listbox.bind.assert_any_call("<Double-Button-1>", app._open_selected_remote_entry)
 
     @patch("srcms_uploader.gui.ttk")
     @patch("srcms_uploader.gui.messagebox.showinfo")
@@ -310,7 +318,7 @@ class TestUploaderApp:
         app._on_app_changed()
 
         mock_uploader.list_directory.assert_called_once_with("/sdcard/Music/Uploads")
-        app._remote_listbox.insert.assert_called_once_with("end", "song.mp3")
+        app._remote_listbox.insert.assert_called_once_with("end", "   song.mp3")
         mock_uploader.disconnect.assert_not_called()
 
     @patch("srcms_uploader.gui.ttk")
@@ -356,13 +364,51 @@ class TestUploaderApp:
 
         button_mocks[0].config.assert_any_call(state="disabled")
         button_mocks[1].config.assert_any_call(state="normal")
+        button_mocks[5].config.assert_any_call(state="normal")
         button_mocks[6].config.assert_any_call(state="normal")
+        button_mocks[7].config.assert_any_call(state="normal")
+        button_mocks[8].config.assert_any_call(state="normal")
+        button_mocks[9].config.assert_any_call(state="normal")
 
         app._set_connection_state(False)
 
         button_mocks[0].config.assert_any_call(state="normal")
         button_mocks[1].config.assert_any_call(state="disabled")
+        button_mocks[5].config.assert_any_call(state="disabled")
         button_mocks[6].config.assert_any_call(state="disabled")
+        button_mocks[7].config.assert_any_call(state="disabled")
+        button_mocks[8].config.assert_any_call(state="disabled")
+        button_mocks[9].config.assert_any_call(state="disabled")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.filedialog.askdirectory", return_value="C:/Downloads")
+    @patch("srcms_uploader.gui.messagebox.showinfo")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_download_selected_remote_entry_pulls_file(
+        self, mock_uploader_cls, mock_showinfo, mock_askdirectory, mock_ttk, mock_tk, config_file
+    ):
+        """download should pull the selected remote file into the chosen folder."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "SRCMS"
+        app._remote_listbox = MagicMock()
+        app._remote_listbox.curselection.return_value = (0,)
+        app._remote_path_var = MagicMock()
+        app._remote_entries = [("Dancing Queen - Abba.ogg", False)]
+        app._current_remote_dir = "/sdcard/SRCMS/uploads"
+
+        mock_uploader = mock_uploader_cls.return_value
+        app._remote_uploader = mock_uploader
+
+        app._download_selected_remote_entry()
+
+        mock_askdirectory.assert_called_once()
+        mock_uploader.pull.assert_called_once_with("/sdcard/SRCMS/uploads/Dancing Queen - Abba.ogg", "C:/Downloads")
+        mock_showinfo.assert_called_once()
 
     @patch("srcms_uploader.gui.ttk")
     @patch("srcms_uploader.gui.messagebox.showerror")

@@ -143,10 +143,6 @@ class UploaderApp:
                                        command=self._refresh_remote_browser,
                                        state="disabled")
         self._btn_refresh.pack(side="left", padx=(0, 5))
-        self._btn_enter_dir = ttk.Button(remote_btn_frame, text="Enter Dir",
-                                         command=self._open_selected_remote_entry,
-                                         state="disabled")
-        self._btn_enter_dir.pack(side="left", padx=(0, 5))
         self._btn_up = ttk.Button(remote_btn_frame, text="Up",
                                   command=self._go_remote_parent,
                                   state="disabled")
@@ -155,9 +151,14 @@ class UploaderApp:
                                       command=self._delete_selected_remote_entry,
                                       state="disabled")
         self._btn_delete.pack(side="left")
+        self._btn_download = ttk.Button(remote_btn_frame, text="Download Selected",
+                                        command=self._download_selected_remote_entry,
+                                        state="disabled")
+        self._btn_download.pack(side="left", padx=(5, 0))
 
         self._remote_listbox = tk.Listbox(frame_remote, height=8, width=60)
         self._remote_listbox.pack(fill="x", pady=(5, 0))
+        self._remote_listbox.bind("<Double-Button-1>", self._open_selected_remote_entry)
         self._sync_connection_controls()
 
     # ------------------------------------------------------------------
@@ -230,7 +231,7 @@ class UploaderApp:
         self._btn_connect.config(state="disabled" if connected else "normal")
         self._btn_disconnect.config(state="normal" if connected else "disabled")
         remote_state = "normal" if connected else "disabled"
-        for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up, self._btn_delete):
+        for btn in (self._btn_refresh, self._btn_up, self._btn_delete, self._btn_download):
             btn.config(state=remote_state)
         self._upload_btn.config(state=remote_state)
 
@@ -330,7 +331,7 @@ class UploaderApp:
 
         self._remote_listbox.delete(0, tk.END)
         for name, is_dir in self._remote_entries:
-            label = f"[DIR] {name}" if is_dir else name
+            label = self._format_remote_entry_label(name, is_dir)
             self._remote_listbox.insert(tk.END, label)
         self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
 
@@ -339,6 +340,7 @@ class UploaderApp:
         if selected is None:
             return
         name, is_dir = selected
+        name = name.strip()
         if not is_dir:
             messagebox.showinfo("Remote Explorer", "Please select a subdirectory to open.")
             return
@@ -395,6 +397,8 @@ class UploaderApp:
             messagebox.showwarning("Not Connected", "Please connect to the device first.")
             return
 
+        name = name.strip()
+        remote_path = str(PurePosixPath(self._current_remote_dir or "") / name)
         try:
             self._remote_uploader.delete_remote_path(remote_path)
             messagebox.showinfo("Delete Complete", f"Deleted '{remote_path}'.")
@@ -404,6 +408,38 @@ class UploaderApp:
             return
 
         self._refresh_remote_browser()
+
+    def _download_selected_remote_entry(self) -> None:
+        selected = self._get_selected_remote_entry()
+        if selected is None:
+            return
+
+        name, is_dir = selected
+        name = name.strip()
+        if is_dir:
+            messagebox.showinfo("Remote Explorer", "Please select a file to download.")
+            return
+
+        if self._remote_uploader is None:
+            messagebox.showwarning("Not Connected", "Please connect to the device first.")
+            return
+
+        destination = filedialog.askdirectory(title="Select local download folder")
+        if not destination:
+            return
+
+        remote_path = str(PurePosixPath(self._current_remote_dir or "") / name)
+        try:
+            self._remote_uploader.pull(remote_path, destination)
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            messagebox.showerror("Download Failed", str(exc))
+            return
+        except RuntimeError as exc:
+            messagebox.showerror("Download Failed", str(exc))
+            self._terminate_remote_connection()
+            return
+
+        messagebox.showinfo("Download Complete", f"Downloaded '{remote_path}' to '{destination}'.")
 
     def _get_selected_remote_entry(self) -> Optional[Tuple[str, bool]]:
         selection = self._remote_listbox.curselection()
@@ -415,6 +451,11 @@ class UploaderApp:
         if index >= len(self._remote_entries):
             return None
         return self._remote_entries[index]
+
+    def _format_remote_entry_label(self, name: str, is_dir: bool) -> str:
+        if is_dir:
+            return f"[DIR] {name}"
+        return f"   {name}"
 
     # ------------------------------------------------------------------
     # Upload logic

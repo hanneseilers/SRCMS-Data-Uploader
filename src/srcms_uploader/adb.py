@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 import shlex
 import subprocess
+import re
 from pathlib import Path
 from typing import List, Tuple
 
@@ -41,8 +42,22 @@ def _run(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=check,
     )
+
+
+_LS_L_PATTERN = re.compile(
+    r"^(?P<mode>\S+)"
+    r"(?:\s+(?P<links>\d+))?"
+    r"\s+(?P<user>\S+)"
+    r"\s+(?P<group>\S+)"
+    r"(?:\s+(?P<size>\d+))?"
+    r"\s+(?P<date>\d{4}-\d{2}-\d{2})"
+    r"\s+(?P<time>\d{2}:\d{2})"
+    r"\s+(?P<name>.+)$"
+)
 
 
 class AdbUploader:
@@ -185,11 +200,11 @@ class AdbUploader:
             line = raw_line.strip()
             if not line or line.startswith("total "):
                 continue
-            parts = line.split()
-            if len(parts) < 2:
+            match = _LS_L_PATTERN.match(line)
+            if match is None:
                 continue
-            is_dir = parts[0].startswith("d")
-            name = parts[-1]
+            is_dir = match.group("mode").startswith("d")
+            name = match.group("name").strip()
             entries.append((name, is_dir))
         return entries
 
@@ -205,4 +220,23 @@ class AdbUploader:
         if result.returncode != 0:
             raise RuntimeError(
                 f"Failed to delete remote path '{remote_path}'.\nADB output: {output}"
+            )
+
+    def pull(self, remote_path: str, local_dir: str | Path) -> None:
+        """Download a remote file to a local directory."""
+        destination = Path(local_dir)
+        if not destination.exists():
+            raise FileNotFoundError(f"Local directory does not exist: {destination}")
+        if not destination.is_dir():
+            raise NotADirectoryError(f"Local path is not a directory: {destination}")
+
+        target = f"{self.host}:{self.port}"
+        result = _run(
+            [self._adb, "-s", target, "pull", remote_path, str(destination)],
+            check=False,
+        )
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ADB pull failed for '{remote_path}'.\nADB output: {output}"
             )

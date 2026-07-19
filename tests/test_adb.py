@@ -214,6 +214,26 @@ class TestRemoteFileManagement:
                 check=False,
             )
 
+    def test_list_directory_preserves_spaces_in_names(self, uploader):
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(
+                stdout="drwxrwx--x u0_a130  sdcard_rw  3511052 2024-12-20 14:25 Dancing Queen - Abba.ogg\n"
+            ),
+        ):
+            entries = uploader.list_directory("/sdcard/SRCMS/uploads")
+            assert entries == [("Dancing Queen - Abba.ogg", True)]
+
+    def test_list_directory_preserves_umlauts_in_names(self, uploader):
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(
+                stdout="drwxrwx--x u0_a130  sdcard_rw  0 2024-12-20 14:25 Grüße an München\n"
+            ),
+        ):
+            entries = uploader.list_directory("/sdcard/SRCMS/uploads")
+            assert entries == [("Grüße an München", True)]
+
     def test_list_directory_failure_raises(self, uploader):
         with patch(
             "srcms_uploader.adb._run",
@@ -243,3 +263,57 @@ class TestRemoteFileManagement:
         ):
             with pytest.raises(RuntimeError, match="Failed to delete remote path"):
                 uploader.delete_remote_path("/sdcard/SRCMS/uploads/stale.txt")
+
+    def test_pull_file_success(self, uploader, tmp_path):
+        local_dir = tmp_path / "downloads"
+        local_dir.mkdir()
+        with patch("srcms_uploader.adb._run", return_value=self._make_result(stdout="1 file pulled")) as mock_run:
+            uploader.pull("/sdcard/SRCMS/uploads/song.mp3", local_dir)
+            mock_run.assert_called_once_with(
+                [
+                    "/usr/bin/adb",
+                    "-s",
+                    f"192.168.1.100:{ADB_DEFAULT_PORT}",
+                    "pull",
+                    "/sdcard/SRCMS/uploads/song.mp3",
+                    str(local_dir),
+                ],
+                check=False,
+            )
+
+    def test_pull_missing_local_dir_raises(self, uploader, tmp_path):
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            uploader.pull("/sdcard/SRCMS/uploads/song.mp3", tmp_path / "missing")
+
+    def test_pull_non_directory_raises(self, uploader, tmp_path):
+        local_file = tmp_path / "file.txt"
+        local_file.write_text("x")
+        with pytest.raises(NotADirectoryError, match="not a directory"):
+            uploader.pull("/sdcard/SRCMS/uploads/song.mp3", local_file)
+
+    def test_pull_supports_umlaut_names(self, uploader, tmp_path):
+        local_dir = tmp_path / "downloads"
+        local_dir.mkdir()
+        with patch("srcms_uploader.adb._run", return_value=self._make_result(stdout="1 file pulled")) as mock_run:
+            uploader.pull("/sdcard/SRCMS/uploads/Grüße an München.mp3", local_dir)
+            mock_run.assert_called_once_with(
+                [
+                    "/usr/bin/adb",
+                    "-s",
+                    f"192.168.1.100:{ADB_DEFAULT_PORT}",
+                    "pull",
+                    "/sdcard/SRCMS/uploads/Grüße an München.mp3",
+                    str(local_dir),
+                ],
+                check=False,
+            )
+
+    def test_pull_failure_raises(self, uploader, tmp_path):
+        local_dir = tmp_path / "downloads"
+        local_dir.mkdir()
+        with patch(
+            "srcms_uploader.adb._run",
+            return_value=self._make_result(returncode=1, stderr="pull failed"),
+        ):
+            with pytest.raises(RuntimeError, match="ADB pull failed"):
+                uploader.pull("/sdcard/SRCMS/uploads/song.mp3", local_dir)
