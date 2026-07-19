@@ -186,6 +186,81 @@ class TestUploaderApp:
         mock_uploader.list_directory.assert_called_once_with("/sdcard/SRCMS/uploads")
 
     @patch("srcms_uploader.gui.ttk")
+    def test_app_selection_updates_remote_root(self, mock_ttk, mock_tk, config_file):
+        """changing the selected app should reset the remote browser root."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "Music"
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = ""
+        app._selected_app_path_var = MagicMock()
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+        app._current_remote_dir = "/sdcard/SRCMS/uploads/subdir"
+
+        app._on_app_changed()
+
+        assert app._current_remote_dir == "/sdcard/Music/Uploads"
+        app._selected_app_path_var.set.assert_called_once_with("/sdcard/Music/Uploads")
+        app._remote_path_var.set.assert_called_once_with("Current remote path: /sdcard/Music/Uploads")
+        app._remote_listbox.delete.assert_called_once_with(0, "end")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_refresh_remote_browser_resets_from_previous_app_root(
+        self, mock_uploader_cls, mock_ttk, mock_tk, config_file
+    ):
+        """refresh should ignore stale paths from another app selection."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "Music"
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+        app._selected_app_path_var = MagicMock()
+        app._current_remote_dir = "/sdcard/SRCMS/uploads/subdir"
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = []
+
+        app._refresh_remote_browser()
+
+        assert app._current_remote_dir == "/sdcard/Music/Uploads"
+        mock_uploader.list_directory.assert_called_once_with("/sdcard/Music/Uploads")
+
+    @patch("srcms_uploader.gui.ttk")
+    @patch("srcms_uploader.gui.AdbUploader")
+    def test_app_selection_refreshes_remote_browser_when_connected(
+        self, mock_uploader_cls, mock_ttk, mock_tk, config_file
+    ):
+        """changing the app should immediately refresh the file explorer when connected."""
+        from srcms_uploader.gui import UploaderApp
+
+        app = UploaderApp(config_path=str(config_file))
+        app._app_var = MagicMock()
+        app._app_var.get.return_value = "Music"
+        app._ip_var = MagicMock()
+        app._ip_var.get.return_value = "192.168.1.5"
+        app._remote_listbox = MagicMock()
+        app._remote_path_var = MagicMock()
+        app._selected_app_path_var = MagicMock()
+        app._current_remote_dir = "/sdcard/SRCMS/uploads"
+
+        mock_uploader = mock_uploader_cls.return_value
+        mock_uploader.list_directory.return_value = [("song.mp3", False)]
+
+        app._on_app_changed()
+
+        mock_uploader.connect.assert_called_once()
+        mock_uploader.list_directory.assert_called_once_with("/sdcard/Music/Uploads")
+        app._remote_listbox.insert.assert_called_once_with("end", "song.mp3")
+
+    @patch("srcms_uploader.gui.ttk")
     @patch("srcms_uploader.gui.messagebox.showerror")
     @patch("srcms_uploader.gui.AdbUploader")
     def test_connect_and_browse_shows_error_on_failed_connection(
