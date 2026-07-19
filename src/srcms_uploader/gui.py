@@ -335,7 +335,7 @@ class UploaderApp:
             self._remote_listbox.insert(tk.END, label)
         self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
 
-    def _open_selected_remote_entry(self) -> None:
+    def _open_selected_remote_entry(self, *_args) -> None:
         selected = self._get_selected_remote_entry()
         if selected is None:
             return
