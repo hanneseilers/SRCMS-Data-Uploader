@@ -32,6 +32,8 @@ class UploaderApp:
         self._selected_paths: List[Path] = []
         self._remote_entries: List[Tuple[str, bool]] = []
         self._current_remote_dir: Optional[str] = None
+        self._current_remote_app_name: Optional[str] = None
+        self._remote_uploader: Optional[AdbUploader] = None
 
         self._root = tk.Tk()
         self._root.title("SRCMS Data Uploader")
@@ -71,7 +73,15 @@ class UploaderApp:
         ip_entry = ttk.Entry(ip_row, textvariable=self._ip_var, width=36)
         ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        ttk.Button(ip_row, text="Open", command=self._connect_and_browse).pack(side="left")
+        self._btn_connect = ttk.Button(ip_row, text="Connect", command=self._connect_and_browse)
+        self._btn_connect.pack(side="left", padx=(0, 5))
+        self._btn_disconnect = ttk.Button(
+            ip_row,
+            text="Disconnect",
+            command=self._disconnect_remote,
+            state="disabled",
+        )
+        self._btn_disconnect.pack(side="left")
 
         # --- File Selection ---
         frame_files = ttk.LabelFrame(root, text="Files / Directories to Upload", padding=10)
@@ -92,14 +102,18 @@ class UploaderApp:
         frame_app.pack(fill="x", **pad)
 
         self._app_var = tk.StringVar(master=root)
+        self._selected_app_path_var = tk.StringVar(master=root, value="")
         app_names = [app.name for app in self._apps]
         self._app_combo = ttk.Combobox(
             frame_app, textvariable=self._app_var, values=app_names,
             state="readonly", width=37,
         )
         self._app_combo.pack(fill="x")
+        self._app_combo.bind("<<ComboboxSelected>>", self._on_app_changed)
+        self._app_var.trace_add("write", self._on_app_changed)
         if app_names:
             self._app_combo.current(0)
+        ttk.Label(frame_app, textvariable=self._selected_app_path_var).pack(fill="x", pady=(4, 0))
 
         # --- Upload Button ---
         self._upload_btn = ttk.Button(root, text="Upload", command=self._start_upload,
@@ -184,23 +198,92 @@ class UploaderApp:
             messagebox.showwarning("Missing Input", "Please select a remote app.")
             return
 
+        if self._remote_uploader is not None:
+            return
+
         # Always start at the app root when connecting
+        self._remote_uploader = AdbUploader(host=ip)
+        self._current_remote_app_name = remote_app.name
         self._current_remote_dir = remote_app.path
+        self._selected_app_path_var.set(remote_app.path)
+        try:
+            self._remote_uploader.connect()
+        except RuntimeError as exc:
+            self._remote_uploader = None
+            messagebox.showerror("Connection Error", str(exc))
+            self._set_connection_state(False)
+            return
+
+        self._set_connection_state(True)
         self._refresh_remote_browser()
 
-    def _set_remote_buttons_state(self, state: str) -> None:
-        """Enable or disable all buttons that require an active remote connection."""
-        for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up,
-                    self._btn_delete, self._upload_btn):
-            btn.config(state=state)
+    def _set_connection_state(self, connected: bool) -> None:
+        """Update connection-dependent controls."""
+        self._btn_connect.config(state="disabled" if connected else "normal")
+        self._btn_disconnect.config(state="normal" if connected else "disabled")
+        remote_state = "normal" if connected else "disabled"
+        for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up, self._btn_delete):
+            btn.config(state=remote_state)
+        self._upload_btn.config(state=remote_state)
 
     def _on_ip_changed(self, *_args) -> None:
         """Disable remote-dependent buttons whenever the IP address field is edited."""
-        self._set_remote_buttons_state("disabled")
+        if self._remote_uploader is None:
+            self._btn_connect.config(state="normal")
+            self._btn_disconnect.config(state="disabled")
+            for btn in (self._btn_refresh, self._btn_enter_dir, self._btn_up, self._btn_delete, self._upload_btn):
+                btn.config(state="disabled")
+        else:
+            self._btn_connect.config(state="disabled")
+            self._btn_disconnect.config(state="normal")
+
+    def _disconnect_remote(self) -> None:
+        if self._remote_uploader is None:
+            return
+
+        self._remote_uploader.disconnect()
+        self._remote_uploader = None
+        self._remote_entries = []
+        self._remote_listbox.delete(0, tk.END)
+        self._remote_path_var.set("")
+        self._set_connection_state(False)
 
     def _selected_remote_app(self) -> Optional[RemoteApp]:
         selected_name = self._app_var.get()
         return next((a for a in self._apps if a.name == selected_name), None)
+
+    def _is_within_selected_app_root(self, remote_dir: str, remote_app: RemoteApp) -> bool:
+        current = PurePosixPath(remote_dir)
+        root = PurePosixPath(remote_app.path)
+        current_parts = current.parts
+        root_parts = root.parts
+        return len(current_parts) >= len(root_parts) and current_parts[:len(root_parts)] == root_parts
+
+    def _ensure_remote_browser_root(self, remote_app: RemoteApp) -> None:
+        if not self._current_remote_dir or not self._is_within_selected_app_root(self._current_remote_dir, remote_app):
+            self._current_remote_dir = remote_app.path
+
+    def _on_app_changed(self, *_args) -> None:
+        remote_app = self._selected_remote_app()
+        if remote_app is None:
+            self._current_remote_app_name = None
+            self._current_remote_dir = None
+            self._selected_app_path_var.set("")
+            self._remote_entries = []
+            self._remote_listbox.delete(0, tk.END)
+            self._remote_path_var.set("")
+            return
+
+        self._current_remote_app_name = remote_app.name
+        self._selected_app_path_var.set(remote_app.path)
+        self._ensure_remote_browser_root(remote_app)
+        self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
+
+        if self._ip_var.get().strip():
+            self._refresh_remote_browser()
+        else:
+            self._remote_entries = []
+            self._remote_listbox.delete(0, tk.END)
 
     def _refresh_remote_browser(self, silent_on_error: bool = False) -> None:
         ip = self._ip_var.get().strip()
@@ -213,13 +296,16 @@ class UploaderApp:
             messagebox.showwarning("Missing Input", "Please select a remote app.")
             return
 
-        if not self._current_remote_dir:
-            self._current_remote_dir = remote_app.path
+        self._current_remote_app_name = remote_app.name
+        self._ensure_remote_browser_root(remote_app)
 
-        uploader = AdbUploader(host=ip)
+        if self._remote_uploader is None:
+            if not silent_on_error:
+                messagebox.showwarning("Not Connected", "Please connect to the device first.")
+            return
+
         try:
-            uploader.connect()
-            self._remote_entries = uploader.list_directory(self._current_remote_dir)
+            self._remote_entries = self._remote_uploader.list_directory(self._current_remote_dir)
         except RuntimeError as exc:
             if not silent_on_error:
                 messagebox.showerror("Remote Explorer Error", str(exc))
@@ -228,17 +314,13 @@ class UploaderApp:
             self._remote_path_var.set(
                 f"Current remote path: {self._current_remote_dir} (connection failed)"
             )
-            self._set_remote_buttons_state("disabled")
             return
-        finally:
-            uploader.disconnect()
 
         self._remote_listbox.delete(0, tk.END)
         for name, is_dir in self._remote_entries:
             label = f"[DIR] {name}" if is_dir else name
             self._remote_listbox.insert(tk.END, label)
         self._remote_path_var.set(f"Current remote path: {self._current_remote_dir}")
-        self._set_remote_buttons_state("normal")
 
     def _open_selected_remote_entry(self) -> None:
         selected = self._get_selected_remote_entry()
@@ -258,6 +340,9 @@ class UploaderApp:
         if remote_app is None:
             messagebox.showwarning("Missing Input", "Please select a remote app.")
             return
+
+        self._current_remote_app_name = remote_app.name
+        self._ensure_remote_browser_root(remote_app)
 
         if not self._current_remote_dir:
             self._current_remote_dir = remote_app.path
@@ -294,16 +379,16 @@ class UploaderApp:
             messagebox.showwarning("Missing Input", "Please enter the device IP address.")
             return
 
-        uploader = AdbUploader(host=ip)
+        if self._remote_uploader is None:
+            messagebox.showwarning("Not Connected", "Please connect to the device first.")
+            return
+
         try:
-            uploader.connect()
-            uploader.delete_remote_path(remote_path)
+            self._remote_uploader.delete_remote_path(remote_path)
             messagebox.showinfo("Delete Complete", f"Deleted '{remote_path}'.")
         except RuntimeError as exc:
             messagebox.showerror("Delete Failed", str(exc))
             return
-        finally:
-            uploader.disconnect()
 
         self._refresh_remote_browser()
 
